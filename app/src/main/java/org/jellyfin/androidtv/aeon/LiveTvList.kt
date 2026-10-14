@@ -3,12 +3,14 @@ package org.jellyfin.androidtv.aeon
 import android.content.Context
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import org.jellyfin.androidtv.aeon.AeonUi.buildChannelRow
 import org.jellyfin.androidtv.aeon.AeonUi.dp
-import org.jellyfin.androidtv.aeon.AeonUi.titleView
+import org.jellyfin.androidtv.aeon.AeonUi.groupHeader
 
 /**
  * Shared grouped channel list for both Live TV screens: one section per
@@ -56,32 +58,17 @@ object LiveTvList {
 
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
             return if (viewType == 0) {
-                val header = with(context) {
-                    titleView("", 28).apply {
-                        setTextColor(AeonUi.ACCENT)
-                        typeface = android.graphics.Typeface.DEFAULT_BOLD
-                        layoutParams = LinearLayout.LayoutParams(
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                            LinearLayout.LayoutParams.WRAP_CONTENT,
-                        ).apply {
-                            topMargin = context.dp(20)
-                            bottomMargin = context.dp(6)
-                        }
-                    }
-                }
-                object : RecyclerView.ViewHolder(header) {}
+                object : RecyclerView.ViewHolder(with(context) { groupHeader("") }) {}
             } else {
                 // Placeholder; replaced in onBindViewHolder.
-                object : RecyclerView.ViewHolder(
-                    android.widget.FrameLayout(context),
-                ) {}
+                object : RecyclerView.ViewHolder(FrameLayout(context)) {}
             }
         }
 
         override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
             val item = flat[position]
             if (item is String) {
-                (holder.itemView as android.widget.TextView).text = item
+                holder.itemView.findViewWithTag<TextView>("aeon_group_label")?.text = item
             } else if (item is LiveChannel) {
                 val row = with(context) {
                     buildChannelRow(context, item, data) { onPlay(item) }

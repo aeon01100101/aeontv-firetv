@@ -7,9 +7,9 @@
 
     <string name="aeon_home_title">AeonTV</string>
     <string name="aeon_home_door_originals">Originally from AeonTV</string>
-    <string name="aeon_home_door_originals_sub">Shows and movies from our own archive</string>
+    <string name="aeon_home_door_originals_sub">Isaiah\'s own uploads, posters and all</string>
     <string name="aeon_home_door_other">Other media</string>
-    <string name="aeon_home_door_other_sub">Archive.org and live TV</string>
+    <string name="aeon_home_door_other_sub">The whole archive.org catalog + Live TV</string>
 
     <style name="AeonTvTheme" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/aeon_background</item>

@@ -1,12 +1,16 @@
 package org.jellyfin.androidtv.aeon
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Outline
+import android.graphics.Rect
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -21,19 +25,26 @@ import coil3.ImageLoader
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import coil3.request.target
+import org.jellyfin.androidtv.BuildConfig
 import org.jellyfin.androidtv.R
 
 /**
  * Shared lean UI helpers for the AeonTV TV screens: classic Views built in
- * code, remote-friendly (focusable cards with a visible accent ring),
- * dark background #170A2E, accent #00C8F0, large text for TV distances.
+ * code, remote-friendly (unmistakable focus: scale + cyan ring + shadow,
+ * idle cards slightly dimmed), deep-purple-to-black gradients, accent
+ * #00C8F0, large text for TV distances.
  */
 object AeonUi {
     const val BG = 0xFF170A2E.toInt()
+    const val BG_BOTTOM = 0xFF0A0616.toInt()
     const val CARD = 0xFF241239.toInt()
     const val ACCENT = 0xFF00C8F0.toInt()
     const val TEXT = 0xFFFFFFFF.toInt()
     const val SUB = 0xFFB8A8D8.toInt()
+
+    private const val FOCUS_SCALE = 1.06f
+    private const val FOCUS_MS = 200L
+    private const val IDLE_ALPHA = 0.84f
 
     val TILE_COLORS = intArrayOf(
         0xFF1565C0.toInt(), 0xFF6A1B9A.toInt(), 0xFF00695C.toInt(), 0xFFAD1457.toInt(),
@@ -42,6 +53,47 @@ object AeonUi {
     )
 
     fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    /**
+     * The shared focus feel, unmistakable from across the room: the card
+     * grows to ~1.06x with a cyan ring (from the aeon_card selector) and a
+     * soft shadow over 200ms; idle cards sit slightly dimmed so the focused
+     * one pops. DPAD traversal order is untouched — this is purely visual.
+     */
+    fun View.applyAeonFocus(dimIdle: Boolean = true) {
+        if (dimIdle && !isFocused) alpha = IDLE_ALPHA
+        setOnFocusChangeListener { v, focused ->
+            v.pivotX = (v.width / 2).toFloat()
+            v.pivotY = (v.height / 2).toFloat()
+            v.animate().cancel()
+            v.animate()
+                .scaleX(if (focused) FOCUS_SCALE else 1f)
+                .scaleY(if (focused) FOCUS_SCALE else 1f)
+                .alpha(if (focused || !dimIdle) 1f else IDLE_ALPHA)
+                .setDuration(FOCUS_MS)
+                .start()
+            v.elevation = if (focused) v.context.dp(10).toFloat() else 0f
+        }
+    }
+
+    /** Snap a recycled card back to the transform matching its focus state. */
+    fun View.resetAeonFocus(dimIdle: Boolean = true) {
+        val focused = isFocused
+        scaleX = if (focused) FOCUS_SCALE else 1f
+        scaleY = if (focused) FOCUS_SCALE else 1f
+        alpha = if (focused || !dimIdle) 1f else IDLE_ALPHA
+        elevation = 0f
+    }
+
+    /** Rounded-corner clipping for image views. */
+    fun View.roundedCorners(radiusPx: Float) {
+        clipToOutline = true
+        outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, radiusPx)
+            }
+        }
+    }
 
     /** Full-screen root: dark background, TV-safe padding. */
     fun Context.screenRoot(): LinearLayout = LinearLayout(this).apply {
@@ -54,6 +106,12 @@ object AeonUi {
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
     }
+
+    /** Vertical gradient: deep purple up top fading to near-black. */
+    fun homeGradient(): GradientDrawable = GradientDrawable(
+        GradientDrawable.Orientation.TOP_BOTTOM,
+        intArrayOf(BG, BG_BOTTOM),
+    )
 
     /** Screen title, large and bold. */
     fun Context.titleView(text: String, sizeSp: Int = 44): TextView = TextView(this).apply {
@@ -75,6 +133,41 @@ object AeonUi {
             LinearLayout.LayoutParams.WRAP_CONTENT,
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { bottomMargin = dp(24) }
+    }
+
+    /** Hero banner for the home screen: the AeonTV wordmark art. */
+    fun Context.heroBanner(): ImageView = ImageView(this).apply {
+        setImageResource(R.drawable.app_banner_foreground)
+        scaleType = ImageView.ScaleType.FIT_CENTER
+        adjustViewBounds = true
+        isFocusable = false
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            dp(200),
+        ).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = dp(8)
+            bottomMargin = dp(8)
+        }
+    }
+
+    /** Small footer line: AeonTV + the app version. */
+    fun Context.footerLine(): TextView = TextView(this).apply {
+        text = "AeonTV · ${appVersion()}"
+        setTextColor(SUB)
+        textSize = 18f
+        gravity = Gravity.CENTER
+        alpha = 0.8f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { topMargin = dp(16) }
+    }
+
+    fun appVersion(): String = try {
+        "v${BuildConfig.VERSION_NAME}"
+    } catch (e: Exception) {
+        ""
     }
 
     /** A big focusable menu card (a "door"). */
@@ -104,7 +197,91 @@ object AeonUi {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { bottomMargin = dp(20) }
             setOnClickListener { onClick() }
+            applyAeonFocus(dimIdle = true)
         }
+
+    /**
+     * A large door card with artwork on the left (Home / Other media):
+     * artwork tile + big title + subtitle.
+     */
+    fun Context.doorCard(title: String, subtitle: String, art: View, onClick: () -> Unit): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isFocusable = true
+            isClickable = true
+            setBackgroundResource(R.drawable.aeon_card)
+            setPadding(dp(32), dp(28), dp(40), dp(28))
+            minimumHeight = dp(232)
+            art.layoutParams = LinearLayout.LayoutParams(dp(176), dp(176)).apply {
+                rightMargin = dp(32)
+            }
+            addView(art)
+            val textCol = LinearLayout(context).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            textCol.addView(TextView(context).apply {
+                text = title
+                setTextColor(TEXT)
+                textSize = 40f
+                typeface = Typeface.DEFAULT_BOLD
+            })
+            textCol.addView(TextView(context).apply {
+                text = subtitle
+                setTextColor(SUB)
+                textSize = 24f
+                setPadding(0, dp(8), 0, 0)
+            })
+            addView(textCol)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { bottomMargin = dp(24) }
+            setOnClickListener { onClick() }
+            applyAeonFocus(dimIdle = true)
+        }
+
+    /** Rounded art tile with a brand gradient behind the given content. */
+    fun Context.artTile(child: View): FrameLayout = FrameLayout(this).apply {
+        background = GradientDrawable(
+            GradientDrawable.Orientation.TL_BR,
+            intArrayOf(0xFF2E1A4D.toInt(), 0xFF12081F.toInt()),
+        ).apply { cornerRadius = dp(24).toFloat() }
+        roundedCorners(dp(24).toFloat())
+        addView(child)
+    }
+
+    /** The AeonTV logo mark as door artwork. */
+    fun Context.doorArtLogo(): View = artTile(
+        ImageView(this).apply {
+            setImageResource(R.drawable.app_logo)
+            scaleType = ImageView.ScaleType.CENTER_INSIDE
+            setPadding(dp(24), dp(24), dp(24), dp(24))
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER,
+            )
+        },
+    )
+
+    /** A big glyph (play, live dot, …) as door artwork. */
+    fun Context.doorArtGlyph(glyph: String, glyphColor: Int = ACCENT): View = artTile(
+        TextView(this).apply {
+            text = glyph
+            setTextColor(glyphColor)
+            textSize = 84f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER,
+            )
+        },
+    )
 
     /** A focusable list row with a title and an optional detail line. */
     fun Context.listRow(title: String, detail: String?, onClick: () -> Unit): LinearLayout =
@@ -136,6 +313,7 @@ object AeonUi {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             ).apply { bottomMargin = dp(12) }
             setOnClickListener { onClick() }
+            applyAeonFocus(dimIdle = false)
         }
 
     fun Context.loadingView(text: String): View = LinearLayout(this).apply {
@@ -147,6 +325,7 @@ object AeonUi {
             ViewGroup.LayoutParams.MATCH_PARENT,
         )
         addView(ProgressBar(this@loadingView).apply {
+            indeterminateTintList = ColorStateList.valueOf(ACCENT)
             layoutParams = LinearLayout.LayoutParams(dp(72), dp(72)).apply { bottomMargin = dp(24) }
         })
         addView(TextView(this@loadingView).apply {
@@ -185,6 +364,7 @@ object AeonUi {
         setTextColor(TEXT)
         setPadding(dp(48), dp(16), dp(48), dp(16))
         setOnClickListener { onClick() }
+        applyAeonFocus(dimIdle = true)
     }
 
     fun Context.toast(text: String) =
@@ -200,10 +380,21 @@ object AeonUi {
     fun tileColorFor(name: String): Int =
         TILE_COLORS[(name.hashCode() and 0x7fffffff) % TILE_COLORS.size]
 
-    /** Grid RecyclerView tuned for TV focus navigation. */
+    /** Grid RecyclerView tuned for TV focus navigation, with cell spacing. */
     fun Context.posterGrid(spanCount: Int): RecyclerView = RecyclerView(this).apply {
         layoutManager = GridLayoutManager(this@posterGrid, spanCount)
         setBackgroundColor(BG)
+        addItemDecoration(object : RecyclerView.ItemDecoration() {
+            override fun getItemOffsets(
+                outRect: Rect,
+                view: View,
+                parent: RecyclerView,
+                state: RecyclerView.State,
+            ) {
+                val s = this@posterGrid.dp(16)
+                outRect.set(s / 2, s / 2, s / 2, s / 2)
+            }
+        })
         layoutParams = LinearLayout.LayoutParams(
             LinearLayout.LayoutParams.MATCH_PARENT,
             0,
@@ -221,38 +412,80 @@ object AeonUi {
         )
     }
 
-    /** A poster cell for grids: image (2:3) + title below. */
-    open class PosterHolder(val root: LinearLayout, val image: ImageView, val label: TextView) :
-        RecyclerView.ViewHolder(root)
+    /**
+     * A poster cell: 2:3 artwork with rounded corners, title on a gradient
+     * scrim across the bottom, year underneath.
+     */
+    open class PosterHolder(
+        val root: FrameLayout,
+        val image: ImageView,
+        val label: TextView,
+        val year: TextView,
+    ) : RecyclerView.ViewHolder(root)
 
     fun Context.posterHolder(parent: ViewGroup, onClick: (Int) -> Unit): PosterHolder {
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
+        val corner = dp(16).toFloat()
+        val root = object : FrameLayout(this) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val width = MeasureSpec.getSize(widthMeasureSpec)
+                super.onMeasure(
+                    widthMeasureSpec,
+                    MeasureSpec.makeMeasureSpec((width * 1.5f).toInt(), MeasureSpec.EXACTLY),
+                )
+            }
+        }.apply {
             isFocusable = true
             isClickable = true
             setBackgroundResource(R.drawable.aeon_card)
-            setPadding(dp(10), dp(10), dp(10), dp(10))
         }
         val image = ImageView(this).apply {
             scaleType = ImageView.ScaleType.CENTER_CROP
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                0,
-            ).apply { weight = 1f }
-            // 2:3 poster ratio is approximated by the grid column width and
-            // the row height; the crop keeps tiles uniform.
-            minimumHeight = dp(180)
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+            roundedCorners(corner)
+        }
+        val scrim = View(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.BOTTOM_TOP,
+                intArrayOf(0xE6000000.toInt(), 0x00000000.toInt()),
+            )
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                dp(150),
+                Gravity.BOTTOM,
+            )
+            roundedCorners(corner)
+        }
+        val textCol = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.BOTTOM
+            setPadding(dp(16), dp(8), dp(16), dp(14))
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
         }
         val label = TextView(this).apply {
             setTextColor(TEXT)
-            textSize = 20f
+            textSize = 21f
+            typeface = Typeface.DEFAULT_BOLD
             maxLines = 2
-            setPadding(dp(6), dp(8), dp(6), dp(4))
         }
+        val year = TextView(this).apply {
+            setTextColor(SUB)
+            textSize = 18f
+            maxLines = 1
+        }
+        textCol.addView(label)
+        textCol.addView(year)
         root.addView(image)
-        root.addView(label)
+        root.addView(scrim)
+        root.addView(textCol)
         root.setOnClickListener { onClick(root.tag as? Int ?: -1) }
-        return PosterHolder(root, image, label)
+        root.applyAeonFocus(dimIdle = true)
+        return PosterHolder(root, image, label, year)
     }
 
     fun ImageView.loadThumb(url: String?, imageLoader: ImageLoader) {
@@ -288,7 +521,37 @@ object AeonUi {
         }
     }
 
-    /** One channel row: initials tile, name, now/next + progress, focus ring. */
+    /** Section bar for Live TV groups: cyan tick + label. */
+    fun Context.groupHeader(name: String): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        addView(View(context).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(4).toFloat()
+                setColor(ACCENT)
+            }
+            layoutParams = LinearLayout.LayoutParams(dp(10), dp(42)).apply {
+                rightMargin = dp(16)
+            }
+        })
+        addView(TextView(context).apply {
+            text = name
+            tag = "aeon_group_label"
+            setTextColor(ACCENT)
+            textSize = 30f
+            typeface = Typeface.DEFAULT_BOLD
+        })
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            topMargin = dp(28)
+            bottomMargin = dp(10)
+        }
+    }
+
+    /** One channel row: initials tile, bold name, now/next + cyan progress, focus glow. */
     fun buildChannelRow(
         context: Context,
         channel: LiveChannel,
@@ -319,7 +582,7 @@ object AeonUi {
                 middle.addView(TextView(this@with).apply {
                     text = channel.name
                     setTextColor(TEXT)
-                    textSize = 28f
+                    textSize = 30f
                     typeface = Typeface.DEFAULT_BOLD
                     maxLines = 1
                 })
@@ -327,7 +590,7 @@ object AeonUi {
                     middle.addView(TextView(this@with).apply {
                         text = current.title
                         setTextColor(ACCENT)
-                        textSize = 22f
+                        textSize = 24f
                         maxLines = 1
                         setPadding(0, dp(4), 0, 0)
                     })
@@ -337,6 +600,8 @@ object AeonUi {
                     middle.addView(ProgressBar(this@with, null, android.R.attr.progressBarStyleHorizontal).apply {
                         max = 1000
                         progress = (fraction * 1000).toInt()
+                        progressTintList = ColorStateList.valueOf(ACCENT)
+                        progressBackgroundTintList = ColorStateList.valueOf(0x33FFFFFF)
                         layoutParams = LinearLayout.LayoutParams(
                             LinearLayout.LayoutParams.MATCH_PARENT,
                             dp(10),
@@ -363,7 +628,48 @@ object AeonUi {
                 }
                 addView(middle)
                 setOnClickListener { onPlay() }
+                applyAeonFocus(dimIdle = false)
             }
         }
+    }
+
+    /**
+     * Full-bleed detail backdrop: the item's art dimmed with a dark scrim
+     * so the content text on top stays readable.
+     */
+    fun Context.detailRoot(content: View, imageData: Any?, loader: ImageLoader?): FrameLayout {
+        val root = FrameLayout(this)
+        val art = ImageView(this).apply {
+            scaleType = ImageView.ScaleType.CENTER_CROP
+            alpha = 0.34f
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+        }
+        val scrim = View(this).apply {
+            background = GradientDrawable(
+                GradientDrawable.Orientation.TOP_BOTTOM,
+                intArrayOf(0x55000000.toInt(), BG, BG),
+            )
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+            )
+        }
+        root.addView(art)
+        root.addView(scrim)
+        root.addView(content)
+        if (loader != null && imageData != null) {
+            loader.enqueue(
+                ImageRequest.Builder(this)
+                    .data(imageData)
+                    .target(art)
+                    .memoryCachePolicy(CachePolicy.ENABLED)
+                    .diskCachePolicy(CachePolicy.ENABLED)
+                    .build(),
+            )
+        }
+        return root
     }
 }

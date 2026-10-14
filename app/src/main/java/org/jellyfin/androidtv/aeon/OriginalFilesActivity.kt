@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.ViewGroup
 import android.widget.LinearLayout
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.aeon.AeonUi.detailRoot
 import org.jellyfin.androidtv.aeon.AeonUi.dp
 import org.jellyfin.androidtv.aeon.AeonUi.errorView
 import org.jellyfin.androidtv.aeon.AeonUi.listRow
@@ -51,17 +53,31 @@ class OriginalFilesActivity : Activity() {
                 showError("Nothing playable in this item.")
                 return@launch
             }
-            val list = screenRoot()
-            list.addView(titleView(title, 44))
-            for (file in files) {
-                list.addView(
-                    with(this@OriginalFilesActivity) {
-                        listRow(file.name, file.sizeLabel) { playFile(identifier, title, file) }
-                    },
+            val list = LinearLayout(this@OriginalFilesActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                val p = dp(48)
+                setPadding(p, dp(40), p, dp(32))
+                layoutParams = ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
                 )
             }
-            setContentView(list)
-            (list.getChildAt(1) as? LinearLayout)?.requestFocus()
+            list.addView(titleView(title, 44))
+            val rows = files.map { file ->
+                with(this@OriginalFilesActivity) {
+                    listRow(file.name, file.sizeLabel) { playFile(identifier, title, file) }
+                }.also { list.addView(it) }
+            }
+            setContentView(
+                with(this@OriginalFilesActivity) {
+                    detailRoot(
+                        list,
+                        "https://archive.org/services/img/$identifier",
+                        OriginalThumbnails.get(this@OriginalFilesActivity),
+                    )
+                },
+            )
+            rows.firstOrNull()?.requestFocus()
         }
     }
 

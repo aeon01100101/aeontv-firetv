@@ -19,6 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.aeon.AeonUi.detailRoot
 import org.jellyfin.androidtv.aeon.AeonUi.dp
 import org.jellyfin.androidtv.aeon.AeonUi.errorView
 import org.jellyfin.androidtv.aeon.AeonUi.listRow
@@ -86,38 +87,21 @@ class ArchiveDetailActivity : Activity() {
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(AeonUi.BG)
+            val p = dp(48)
+            setPadding(p, dp(40), p, dp(32))
         }
-        val header = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
+        column.addView(titleView(title, 48))
+        val meta = listOfNotNull(year, creator).joinToString(" · ")
+        if (meta.isNotBlank()) column.addView(subtitleView(meta, 24))
+        if (!description.isNullOrBlank()) {
+            column.addView(subtitleView(description.take(600), 22))
+        }
+        column.addView(android.view.View(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { bottomMargin = dp(20) }
-        }
-        header.addView(ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            layoutParams = LinearLayout.LayoutParams(dp(220), dp(330)).apply { rightMargin = dp(28) }
-            loader.enqueue(
-                ImageRequest.Builder(context)
-                    .data("https://archive.org/services/img/$identifier")
-                    .target(this)
-                    .build(),
+                dp(16),
             )
         })
-        val info = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-        info.addView(titleView(title, 40))
-        val meta = listOfNotNull(year, creator).joinToString(" · ")
-        if (meta.isNotBlank()) info.addView(subtitleView(meta, 24))
-        if (!description.isNullOrBlank()) {
-            info.addView(subtitleView(description.take(600), 22))
-        }
-        header.addView(info)
-        column.addView(header)
 
         for (file in files) {
             val detail = listOfNotNull(
@@ -134,7 +118,9 @@ class ArchiveDetailActivity : Activity() {
             )
         }
         scroll.addView(column)
-        return scroll
+        return with(this) {
+            detailRoot(scroll, "https://archive.org/services/img/$identifier", loader)
+        }
     }
 
     private fun showError(message: String) {

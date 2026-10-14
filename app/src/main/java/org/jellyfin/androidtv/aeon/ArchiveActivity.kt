@@ -27,6 +27,7 @@ import org.jellyfin.androidtv.aeon.AeonUi.loadThumb
 import org.jellyfin.androidtv.aeon.AeonUi.loadingView
 import org.jellyfin.androidtv.aeon.AeonUi.posterGrid
 import org.jellyfin.androidtv.aeon.AeonUi.posterHolder
+import org.jellyfin.androidtv.aeon.AeonUi.resetAeonFocus
 import org.jellyfin.androidtv.aeon.AeonUi.screenRoot
 import org.jellyfin.androidtv.aeon.AeonUi.titleView
 import org.jellyfin.androidtv.aeon.AeonUi.toast
@@ -222,8 +223,9 @@ class ArchiveActivity : Activity() {
                 val item = items[position]
                 holder.root.tag = position
                 holder.image.loadThumb(item.thumbnailUrl, imageLoader)
-                val year = item.year?.let { " ($it)" } ?: ""
-                holder.label.text = item.title + year
+                holder.label.text = item.title
+                holder.year.text = item.year ?: ""
+                holder.root.resetAeonFocus(dimIdle = true)
             }
         }
     }

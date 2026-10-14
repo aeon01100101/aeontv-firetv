@@ -24,6 +24,7 @@ import org.jellyfin.androidtv.aeon.AeonUi.loadingView
 import org.jellyfin.androidtv.aeon.AeonUi.menuCard
 import org.jellyfin.androidtv.aeon.AeonUi.posterGrid
 import org.jellyfin.androidtv.aeon.AeonUi.posterHolder
+import org.jellyfin.androidtv.aeon.AeonUi.resetAeonFocus
 import org.jellyfin.androidtv.aeon.AeonUi.screenRoot
 import org.jellyfin.androidtv.aeon.AeonUi.subtitleView
 import org.jellyfin.androidtv.aeon.AeonUi.titleView
@@ -80,6 +81,12 @@ class OriginalsActivity : Activity() {
         val root = screenRoot()
         root.addView(titleView("Originally from AeonTV", 56))
         root.addView(subtitleView("${entries.size} shows and movies", 24))
+        root.addView(android.view.View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(12),
+            )
+        })
         root.addView(
             listRow("Live TV", "Channels from our own playlists") {
                 OriginalsLiveTvActivity.start(this)
@@ -106,6 +113,8 @@ class OriginalsActivity : Activity() {
             holder.root.tag = position
             holder.image.loadThumb(entry.posterUrl, imageLoader)
             holder.label.text = entry.item.title
+            holder.year.text = entry.item.year ?: ""
+            holder.root.resetAeonFocus(dimIdle = true)
         }
 
         override fun getItemCount(): Int = entries.size

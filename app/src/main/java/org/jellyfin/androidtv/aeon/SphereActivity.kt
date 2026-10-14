@@ -19,6 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.aeon.AeonUi.detailRoot
 import org.jellyfin.androidtv.aeon.AeonUi.dp
 import org.jellyfin.androidtv.aeon.AeonUi.errorView
 import org.jellyfin.androidtv.aeon.AeonUi.listRow
@@ -95,28 +96,13 @@ class SphereActivity : Activity() {
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(AeonUi.BG)
+            val p = dp(48)
+            setPadding(p, dp(40), p, dp(32))
         }
-        column.addView(titleView(".sphere", 36))
-        column.addView(titleView(manifest.title ?: "", 44))
+        column.addView(titleView(".sphere", 32))
+        column.addView(titleView(manifest.title ?: "", 48))
         val meta = listOfNotNull(manifest.year, manifest.creator).joinToString(" · ")
         if (meta.isNotBlank()) column.addView(subtitleView(meta, 24))
-        if (state.posterData != null) {
-            column.addView(ImageView(this).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    dp(360),
-                ).apply { bottomMargin = dp(16) }
-                val loader = OriginalThumbnails.get(context)
-                loader.enqueue(
-                    ImageRequest.Builder(context)
-                        .data(state.posterData)
-                        .target(this)
-                        .build(),
-                )
-            })
-        }
         if (!manifest.description.isNullOrBlank()) {
             column.addView(subtitleView(manifest.description, 22))
         }
@@ -132,7 +118,9 @@ class SphereActivity : Activity() {
             }
         }
         scroll.addView(column)
-        return scroll
+        return with(this) {
+            detailRoot(scroll, state.posterData, OriginalThumbnails.get(this@SphereActivity))
+        }
     }
 
     private sealed interface SphereState {
