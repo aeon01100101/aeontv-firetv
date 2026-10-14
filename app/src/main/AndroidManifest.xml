@@ -117,9 +117,6 @@
                 <action android:name="android.intent.action.MAIN" />
                 <action android:name="android.intent.action.SEARCH" />
                 <action android:name="android.intent.action.VIEW" />
-
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
             </intent-filter>
 
             <meta-data
@@ -129,6 +126,67 @@
         <activity-alias
             android:name=".startup.StartupActivity"
             android:targetActivity=".ui.startup.StartupActivity" />
+
+        <!-- AeonTV: the two doors, no servers. AeonHomeActivity is the launcher entry. -->
+        <activity
+            android:name=".aeon.AeonHomeActivity"
+            android:exported="true"
+            android:theme="@style/AeonTvTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".aeon.OtherMediaActivity"
+            android:exported="false"
+            android:theme="@style/AeonTvTheme" />
+        <activity
+            android:name=".aeon.OriginalsActivity"
+            android:exported="false"
+            android:theme="@style/AeonTvTheme" />
+        <activity
+            android:name=".aeon.OriginalFilesActivity"
+            android:exported="false"
+            android:theme="@style/AeonTvTheme" />
+        <activity
+            android:name=".aeon.ArchiveActivity"
+            android:exported="false"
+            android:theme="@style/AeonTvTheme" />
+        <activity
+            android:name=".aeon.ArchiveDetailActivity"
+            android:exported="false"
+            android:theme="@style/AeonTvTheme" />
+        <activity
+            android:name=".aeon.LiveTvActivity"
+            android:exported="false"
+            android:theme="@style/AeonTvTheme" />
+        <activity
+            android:name=".aeon.OriginalsLiveTvActivity"
+            android:exported="false"
+            android:theme="@style/AeonTvTheme" />
+        <activity
+            android:name=".aeon.TvPlayerActivity"
+            android:exported="false"
+            android:theme="@style/AeonTvTheme" />
+        <activity
+            android:name=".aeon.SphereActivity"
+            android:exported="true"
+            android:theme="@style/AeonTvTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" />
+                <data android:scheme="content" />
+                <data android:mimeType="video/sphere" />
+                <data android:mimeType="application/x-sphere" />
+                <data android:pathPattern=".*\\.sphere" />
+                <data android:pathPattern=".*\\..*\\.sphere" />
+                <data android:pathPattern=".*\\..*\\..*\\.sphere" />
+            </intent-filter>
+        </activity>
 
         <!-- Main application -->
         <activity

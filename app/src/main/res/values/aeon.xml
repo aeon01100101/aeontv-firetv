@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="aeon_background">#170A2E</color>
+    <color name="aeon_card">#241239</color>
+    <color name="aeon_accent">#00C8F0</color>
+    <color name="aeon_subtitle">#B8A8D8</color>
+
+    <string name="aeon_home_title">AeonTV</string>
+    <string name="aeon_home_door_originals">Originally from AeonTV</string>
+    <string name="aeon_home_door_originals_sub">Shows and movies from our own archive</string>
+    <string name="aeon_home_door_other">Other media</string>
+    <string name="aeon_home_door_other_sub">Archive.org and live TV</string>
+
+    <style name="AeonTvTheme" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/aeon_background</item>
+        <item name="android:colorBackground">@color/aeon_background</item>
+        <item name="android:textColorPrimary">#FFFFFFFF</item>
+    </style>
+</resources>
