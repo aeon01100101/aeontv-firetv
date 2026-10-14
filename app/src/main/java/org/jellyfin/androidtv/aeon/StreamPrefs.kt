@@ -3,26 +3,33 @@ package org.jellyfin.androidtv.aeon
 import android.content.Context
 
 /**
- * Persisted stream-quality preference for the AeonTV TV screens.
+ * Stream-quality preference ("110p ultra-low") for the AeonTV TV screens.
  *
- * "110p ultra-low" is Isaiah's automatic low-bandwidth mode for slow
- * connections: the player caps streams at a 110p ceiling (see
- * TvPlayerActivity) and the file pickers prefer the smallest playable
- * derivative (see ArchiveApi.loadFiles / OriginalsApi.loadPlayableFiles).
- * Off = full quality, today's behavior exactly.
+ * The setting lives on the ACTIVE PROFILE when one exists; otherwise it
+ * falls back to the legacy global preference (so installs that predate
+ * profiles keep their setting). The first profile created inherits the
+ * global value at creation time.
  */
 object StreamPrefs {
     private const val FILE = "aeon_stream"
     private const val KEY_ULTRA_LOW = "ultra_low_110p"
 
-    fun isUltraLow(context: Context): Boolean =
+    private fun prefs(context: Context) =
         context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .getBoolean(KEY_ULTRA_LOW, false)
+
+    /** The global (pre-profiles) value. */
+    fun globalIsUltraLow(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ULTRA_LOW, false)
+
+    fun isUltraLow(context: Context): Boolean =
+        Profiles.active(context)?.ultraLow110p ?: globalIsUltraLow(context)
 
     fun setUltraLow(context: Context, enabled: Boolean) {
-        context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_ULTRA_LOW, enabled)
-            .apply()
+        val profile = Profiles.active(context)
+        if (profile != null) {
+            Profiles.updateProfile(context, profile.id) { it.copy(ultraLow110p = enabled) }
+        } else {
+            prefs(context).edit().putBoolean(KEY_ULTRA_LOW, enabled).apply()
+        }
     }
 }

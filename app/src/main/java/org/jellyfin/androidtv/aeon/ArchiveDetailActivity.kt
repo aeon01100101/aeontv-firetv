@@ -19,6 +19,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.aeon.AeonUi.accentButton
 import org.jellyfin.androidtv.aeon.AeonUi.detailRoot
 import org.jellyfin.androidtv.aeon.AeonUi.dp
 import org.jellyfin.androidtv.aeon.AeonUi.errorView
@@ -104,6 +105,39 @@ class ArchiveDetailActivity : Activity() {
             )
         })
 
+        val activeProfile = Profiles.active(this@ArchiveDetailActivity)
+        if (activeProfile != null) {
+            val fav = FavoriteEntry(
+                kind = "archive",
+                identifier = identifier,
+                title = title,
+                posterUrl = "https://archive.org/services/img/$identifier",
+            )
+            val favButton = with(this) {
+                accentButton(
+                    if (Profiles.isFavorite(activeProfile, "archive", identifier)) {
+                        "★ Favorited"
+                    } else {
+                        "☆ Favorite"
+                    },
+                ) {}
+            }.apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { bottomMargin = dp(16) }
+            }
+            favButton.setOnClickListener {
+                val added = Profiles.toggleFavorite(
+                    this@ArchiveDetailActivity,
+                    activeProfile.id,
+                    fav,
+                )
+                favButton.text = if (added) "★ Favorited" else "☆ Favorite"
+            }
+            column.addView(favButton)
+        }
+
         for (file in files) {
             val detail = listOfNotNull(
                 file.format.takeIf { it.isNotBlank() },
@@ -142,7 +176,15 @@ class ArchiveDetailActivity : Activity() {
                     toast("Couldn't open the .sphere file")
                 }
             } else {
-                TvPlayerActivity.start(this@ArchiveDetailActivity, file.streamUrl(identifier), title)
+                TvPlayerActivity.startTracked(
+                    this@ArchiveDetailActivity,
+                    kind = "archive",
+                    identifier = identifier,
+                    fileKey = file.name,
+                    title = title,
+                    posterUrl = "https://archive.org/services/img/$identifier",
+                    streamUrl = file.streamUrl(identifier),
+                )
             }
         }
     }

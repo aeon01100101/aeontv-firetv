@@ -52,6 +52,30 @@ object AeonUi {
         0xFF827717.toInt(), 0xFFBF360C.toInt(),
     )
 
+    /** Avatar palette for local profiles (~8 colors). */
+    val PROFILE_COLORS = intArrayOf(
+        0xFF1565C0.toInt(), 0xFF6A1B9A.toInt(), 0xFF00695C.toInt(), 0xFFAD1457.toInt(),
+        0xFF4527A0.toInt(), 0xFF00838F.toInt(), 0xFFBF360C.toInt(), 0xFF827717.toInt(),
+    )
+
+    fun profileColor(index: Int): Int =
+        PROFILE_COLORS[(index % PROFILE_COLORS.size + PROFILE_COLORS.size) % PROFILE_COLORS.size]
+
+    /** Circular avatar: profile color + initial letter. */
+    fun Context.avatarView(color: Int, initial: String, sizeDp: Int = 96): TextView =
+        TextView(this).apply {
+            text = initial.take(1).uppercase()
+            setTextColor(TEXT)
+            textSize = (sizeDp * 0.42).toFloat()
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(color)
+            }
+            layoutParams = LinearLayout.LayoutParams(dp(sizeDp), dp(sizeDp))
+        }
+
     fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
 
     /**
@@ -410,6 +434,27 @@ object AeonUi {
             0,
             1f,
         )
+    }
+
+    /** Horizontal poster row for TV focus navigation, with cell spacing. */
+    fun Context.horizontalRow(): RecyclerView = RecyclerView(this).apply {
+        layoutManager = LinearLayoutManager(this@horizontalRow, LinearLayoutManager.HORIZONTAL, false)
+        setBackgroundColor(BG)
+        addItemDecoration(object : RecyclerView.ItemDecoration() {
+            override fun getItemOffsets(
+                outRect: Rect,
+                view: View,
+                parent: RecyclerView,
+                state: RecyclerView.State,
+            ) {
+                val s = this@horizontalRow.dp(16)
+                outRect.set(s / 2, 0, s / 2, 0)
+            }
+        })
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { bottomMargin = dp(8) }
     }
 
     /**

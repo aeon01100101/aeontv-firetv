@@ -134,7 +134,7 @@ class OriginalsActivity : Activity() {
             }
             when {
                 files.isEmpty() -> toast("Nothing playable in this item")
-                files.size == 1 -> playFile(entry.item.identifier, entry.item.title, files[0])
+                files.size == 1 -> playFile(entry.item.identifier, entry.item.title, entry.posterUrl, files[0])
                 else -> OriginalFilesActivity.start(
                     this@OriginalsActivity,
                     entry.item.identifier,
@@ -144,7 +144,7 @@ class OriginalsActivity : Activity() {
         }
     }
 
-    private fun playFile(identifier: String, title: String, file: OriginalFile) {
+    private fun playFile(identifier: String, title: String, posterUrl: String, file: OriginalFile) {
         scope.launch {
             if (file.isSphere) {
                 try {
@@ -156,7 +156,15 @@ class OriginalsActivity : Activity() {
                     toast("Couldn't open the .sphere file")
                 }
             } else {
-                TvPlayerActivity.start(this@OriginalsActivity, file.streamUrl(identifier), title)
+                TvPlayerActivity.startTracked(
+                    this@OriginalsActivity,
+                    kind = "original",
+                    identifier = identifier,
+                    fileKey = file.name,
+                    title = title,
+                    posterUrl = posterUrl,
+                    streamUrl = file.streamUrl(identifier),
+                )
             }
         }
     }

@@ -13,6 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jellyfin.androidtv.aeon.AeonUi.accentButton
 import org.jellyfin.androidtv.aeon.AeonUi.detailRoot
 import org.jellyfin.androidtv.aeon.AeonUi.dp
 import org.jellyfin.androidtv.aeon.AeonUi.errorView
@@ -64,6 +65,41 @@ class OriginalFilesActivity : Activity() {
                 )
             }
             list.addView(titleView(title, 44))
+            val activeProfile = Profiles.active(this@OriginalFilesActivity)
+            if (activeProfile != null) {
+                val fav = FavoriteEntry(
+                    kind = "original",
+                    identifier = identifier,
+                    title = title,
+                    posterUrl = "https://archive.org/services/img/$identifier",
+                )
+                val favButton = with(this@OriginalFilesActivity) {
+                    accentButton(
+                        if (Profiles.isFavorite(activeProfile, "original", identifier)) {
+                            "★ Favorited"
+                        } else {
+                            "☆ Favorite"
+                        },
+                    ) {}
+                }.apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                    ).apply {
+                        topMargin = dp(8)
+                        bottomMargin = dp(16)
+                    }
+                }
+                favButton.setOnClickListener {
+                    val added = Profiles.toggleFavorite(
+                        this@OriginalFilesActivity,
+                        activeProfile.id,
+                        fav,
+                    )
+                    favButton.text = if (added) "★ Favorited" else "☆ Favorite"
+                }
+                list.addView(favButton)
+            }
             val rows = files.map { file ->
                 with(this@OriginalFilesActivity) {
                     listRow(file.name, file.sizeLabel) { playFile(identifier, title, file) }
@@ -100,7 +136,15 @@ class OriginalFilesActivity : Activity() {
                     toast("Couldn't open the .sphere file")
                 }
             } else {
-                TvPlayerActivity.start(this@OriginalFilesActivity, file.streamUrl(identifier), title)
+                TvPlayerActivity.startTracked(
+                    this@OriginalFilesActivity,
+                    kind = "original",
+                    identifier = identifier,
+                    fileKey = file.name,
+                    title = title,
+                    posterUrl = "https://archive.org/services/img/$identifier",
+                    streamUrl = file.streamUrl(identifier),
+                )
             }
         }
     }
