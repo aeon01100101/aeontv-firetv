@@ -56,8 +56,9 @@ class ArchiveDetailActivity : Activity() {
         setContentView(root)
 
         scope.launch {
+            val ultraLow = StreamPrefs.isUltraLow(this@ArchiveDetailActivity)
             val files = try {
-                withContext(Dispatchers.IO) { ArchiveApi.loadFiles(identifier) }
+                withContext(Dispatchers.IO) { ArchiveApi.loadFiles(identifier, ultraLow) }
             } catch (e: Exception) {
                 showError("Couldn't list the files.")
                 return@launch

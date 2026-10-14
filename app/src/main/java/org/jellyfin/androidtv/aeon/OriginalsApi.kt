@@ -114,7 +114,12 @@ object OriginalsApi {
     }
 
     /** Files of [identifier] that AeonTV can play as originals: .mp4 or .sphere only. */
-    suspend fun loadPlayableFiles(identifier: String): List<OriginalFile> = withContext(Dispatchers.IO) {
+    /**
+     * Files of [identifier] that AeonTV can play as originals: .mp4 or .sphere
+     * only. When [preferSmallest] is true (110p ultra-low mode), mp4s are
+     * ordered strictly smallest-first instead of the usual 512kb/h.264 order.
+     */
+    suspend fun loadPlayableFiles(identifier: String, preferSmallest: Boolean = false): List<OriginalFile> = withContext(Dispatchers.IO) {
         val body = get("https://archive.org/metadata/$identifier") ?: return@withContext emptyList()
         val files = JSONObject(body).optJSONArray("files") ?: return@withContext emptyList()
         val mp4s = mutableListOf<Pair<OriginalFile, String>>()
@@ -132,11 +137,15 @@ object OriginalsApi {
                 lower.endsWith(".sphere") -> spheres += OriginalFile(name, size, isSphere = true)
             }
         }
-        val sortedMp4s = mp4s.sortedWith(
-            compareByDescending<Pair<OriginalFile, String>> { it.first.name.endsWith("_512kb.mp4", ignoreCase = true) }
-                .thenByDescending { it.second.contains("h.264", ignoreCase = true) }
-                .thenBy { it.first.sizeBytes },
-        ).map { it.first }
+        val sortedMp4s = if (preferSmallest) {
+            mp4s.map { it.first }.sortedBy { it.sizeBytes }
+        } else {
+            mp4s.sortedWith(
+                compareByDescending<Pair<OriginalFile, String>> { it.first.name.endsWith("_512kb.mp4", ignoreCase = true) }
+                    .thenByDescending { it.second.contains("h.264", ignoreCase = true) }
+                    .thenBy { it.first.sizeBytes },
+            ).map { it.first }
+        }
         return@withContext sortedMp4s + spheres.sortedBy { it.name }
     }
 

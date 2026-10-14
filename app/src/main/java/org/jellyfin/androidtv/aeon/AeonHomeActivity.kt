@@ -49,6 +49,16 @@ class AeonHomeActivity : Activity() {
         ) { OtherMediaActivity.start(this) }
         root.addView(originals)
         root.addView(other)
+        val ultraLow = StreamPrefs.isUltraLow(this)
+        val quality = doorCard(
+            "Stream quality",
+            if (ultraLow) "110p ultra-low — for slow connections" else "Full quality",
+            doorArtGlyph("▼"),
+        ) {
+            StreamPrefs.setUltraLow(this, !StreamPrefs.isUltraLow(this))
+            recreate()
+        }
+        root.addView(quality)
         root.addView(View(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,

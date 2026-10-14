@@ -43,8 +43,9 @@ class OriginalFilesActivity : Activity() {
         setContentView(root)
 
         scope.launch {
+            val ultraLow = StreamPrefs.isUltraLow(this@OriginalFilesActivity)
             val files = try {
-                withContext(Dispatchers.IO) { OriginalsApi.loadPlayableFiles(identifier) }
+                withContext(Dispatchers.IO) { OriginalsApi.loadPlayableFiles(identifier, ultraLow) }
             } catch (e: Exception) {
                 showError("Couldn't list the files.")
                 return@launch

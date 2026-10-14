@@ -123,9 +123,10 @@ class OriginalsActivity : Activity() {
     private fun openEntry(entry: OriginalEntry) {
         toast("Loading…")
         scope.launch {
+            val ultraLow = StreamPrefs.isUltraLow(this@OriginalsActivity)
             val files = try {
                 withContext(Dispatchers.IO) {
-                    OriginalsApi.loadPlayableFiles(entry.item.identifier)
+                    OriginalsApi.loadPlayableFiles(entry.item.identifier, ultraLow)
                 }
             } catch (e: Exception) {
                 toast("Couldn't list the files")

@@ -126,7 +126,14 @@ object ArchiveApi {
      * the 512kb derivative (fast start, low bandwidth), then h.264 MP4s, then
      * the rest. Sphere files inside the item are included as ordinary videos.
      */
-    suspend fun loadFiles(identifier: String): List<ArchiveFile> = withContext(Dispatchers.IO) {
+    /**
+     * Load the playable video files for an item, best streaming choice first:
+     * the 512kb derivative (fast start, low bandwidth), then h.264 MP4s, then
+     * the rest. Sphere files inside the item are included as ordinary videos.
+     * When [preferSmallest] is true (110p ultra-low mode), videos are ordered
+     * strictly smallest-first instead.
+     */
+    suspend fun loadFiles(identifier: String, preferSmallest: Boolean = false): List<ArchiveFile> = withContext(Dispatchers.IO) {
         val body = get("https://archive.org/metadata/$identifier") ?: return@withContext emptyList()
         val files = JSONObject(body).optJSONArray("files") ?: return@withContext emptyList()
         val videos = mutableListOf<ArchiveFile>()
@@ -154,11 +161,15 @@ object ArchiveApi {
                     )
             }
         }
-        val sortedVideos = videos.sortedWith(
-            compareByDescending<ArchiveFile> { it.name.endsWith("_512kb.mp4", ignoreCase = true) }
-                .thenByDescending { it.format.contains("h.264", ignoreCase = true) }
-                .thenBy { it.sizeBytes },
-        )
+        val sortedVideos = if (preferSmallest) {
+            videos.sortedBy { it.sizeBytes }
+        } else {
+            videos.sortedWith(
+                compareByDescending<ArchiveFile> { it.name.endsWith("_512kb.mp4", ignoreCase = true) }
+                    .thenByDescending { it.format.contains("h.264", ignoreCase = true) }
+                    .thenBy { it.sizeBytes },
+            )
+        }
         sortedVideos + spheres.sortedBy { it.name }
     }
 

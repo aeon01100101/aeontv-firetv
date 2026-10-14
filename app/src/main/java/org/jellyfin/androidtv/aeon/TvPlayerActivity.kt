@@ -12,6 +12,7 @@ import androidx.media3.common.Player
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.PlayerView
 import org.jellyfin.androidtv.aeon.AeonUi.toast
 
@@ -55,9 +56,21 @@ class TvPlayerActivity : Activity() {
         val httpDataSourceFactory = DefaultHttpDataSource.Factory()
             .setUserAgent("AeonTV")
             .setAllowCrossProtocolRedirects(true)
-        val exoPlayer = ExoPlayer.Builder(this)
+        val playerBuilder = ExoPlayer.Builder(this)
             .setMediaSourceFactory(DefaultMediaSourceFactory(httpDataSourceFactory))
-            .build()
+        if (StreamPrefs.isUltraLow(this)) {
+            // 110p ultra-low mode: cap rendition choice at a 110p ceiling so
+            // even adaptive HLS streams pick the lowest they offer.
+            val trackSelector = DefaultTrackSelector(this)
+            trackSelector.setParameters(
+                trackSelector.buildUponParameters()
+                    .setMaxVideoSize(196, 110)
+                    .setMaxVideoBitrate(250_000)
+                    .setForceLowestBitrate(true),
+            )
+            playerBuilder.setTrackSelector(trackSelector)
+        }
+        val exoPlayer = playerBuilder.build()
         exoPlayer.addListener(object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 toast("Couldn't play this file")
