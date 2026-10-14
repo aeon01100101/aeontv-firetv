@@ -15,10 +15,10 @@ android {
 		targetSdk = libs.versions.android.targetSdk.get().toInt()
 
 		// Release version
-		applicationId = namespace
+		applicationId = "com.aeontv.tv"
 		versionName = project.getVersionName()
 		versionCode = getVersionCode(versionName!!)
-		setProperty("archivesBaseName", "jellyfin-androidtv-v$versionName")
+		setProperty("archivesBaseName", "aeontv-tv-v$versionName")
 	}
 
 	buildFeatures {
@@ -36,9 +36,9 @@ android {
 			isMinifyEnabled = false
 
 			// Set package names used in various XML files
-			resValue("string", "app_id", namespace!!)
-			resValue("string", "app_search_suggest_authority", "${namespace}.content")
-			resValue("string", "app_search_suggest_intent_data", "content://${namespace}.content/intent")
+			resValue("string", "app_id", "com.aeontv.tv")
+			resValue("string", "app_search_suggest_authority", "com.aeontv.tv.content")
+			resValue("string", "app_search_suggest_intent_data", "content://com.aeontv.tv.content/intent")
 
 			// Set flavored application name
 			resValue("string", "app_name", "@string/app_name_release")
@@ -51,9 +51,9 @@ android {
 			applicationIdSuffix = ".debug"
 
 			// Set package names used in various XML files
-			resValue("string", "app_id", namespace + applicationIdSuffix)
-			resValue("string", "app_search_suggest_authority", "${namespace + applicationIdSuffix}.content")
-			resValue("string", "app_search_suggest_intent_data", "content://${namespace + applicationIdSuffix}.content/intent")
+			resValue("string", "app_id", "com.aeontv.tv" + applicationIdSuffix)
+			resValue("string", "app_search_suggest_authority", "com.aeontv.tv${applicationIdSuffix}.content")
+			resValue("string", "app_search_suggest_intent_data", "content://com.aeontv.tv${applicationIdSuffix}.content/intent")
 
 			// Set flavored application name
 			resValue("string", "app_name", "@string/app_name_debug")
