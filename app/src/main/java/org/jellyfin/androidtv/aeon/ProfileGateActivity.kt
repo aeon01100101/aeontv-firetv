@@ -22,25 +22,27 @@ import org.jellyfin.androidtv.aeon.AeonUi.titleView
 import org.jellyfin.androidtv.R
 
 /**
- * The launcher entry: who is watching?
+ * The launcher entry.
  *
- * - No profiles yet → owner setup (first run).
- * - Exactly one profile with no PIN → straight in.
- * - Otherwise → the picker; PIN'd profiles ask for their PIN.
+ * - No account yet → first-run setup (account PIN + first profile).
+ * - Account locked → the account PIN unlocks this TV (once per session).
+ * - Then: exactly one profile with no PIN → straight in; otherwise the
+ *   "Who's watching?" picker; profiles with their own PIN ask for it.
  *
- * PIN rules (Isaiah's): PINs are optional per profile; there is NO
- * self-service PIN reset — the screen says to ask the owner, and only the
- * owner can reset PINs from Manage profiles. No master PIN, no backdoor.
+ * Model (Isaiah's): ONE account with a PIN; multiple profiles under it;
+ * profile PINs are optional per profile. A forgotten profile PIN can be
+ * reset in Manage profiles (behind the account PIN). The account PIN has
+ * no reset and no backdoor — only clearing the app's data recovers it.
  */
 class ProfileGateActivity : Activity() {
 
-    private enum class PinPurpose { UNLOCK, OWNER_AUTH }
+    private enum class PinPurpose { ACCOUNT, PROFILE }
 
     private var profiles: List<Profile> = emptyList()
     private var pinMode = false
     private val pinDigits = StringBuilder()
     private var pinTarget: Profile? = null
-    private var pinPurpose = PinPurpose.UNLOCK
+    private var pinPurpose = PinPurpose.PROFILE
     private var pinAfterAuth: (() -> Unit)? = null
     private var dotsRow: LinearLayout? = null
     private var pinError: TextView? = null
@@ -58,8 +60,20 @@ class ProfileGateActivity : Activity() {
         profiles = Profiles.load(this)
         pinMode = false
         when {
+            !Profiles.hasAccount(this) -> {
+                ProfileSetupActivity.startFirstRun(this)
+                showBlank()
+            }
+            !SessionState.accountUnlocked -> showAccountPin()
+            else -> routeAfterUnlock()
+        }
+    }
+
+    private fun routeAfterUnlock() {
+        profiles = Profiles.load(this)
+        when {
             profiles.isEmpty() -> {
-                ProfileSetupActivity.startOwner(this)
+                ProfileSetupActivity.startAdd(this)
                 showBlank()
             }
             profiles.size == 1 && profiles[0].pinHash == null -> {
@@ -69,9 +83,22 @@ class ProfileGateActivity : Activity() {
         }
     }
 
+    private fun showAccountPin() {
+        showPinEntry(
+            profile = null,
+            purpose = PinPurpose.ACCOUNT,
+            title = "Enter account PIN",
+            subtitle = "This TV is protected by an account PIN.",
+            footer = "Forgot the account PIN? It can't be reset — only clearing " +
+                "AeonTV's app data (which removes all profiles) restores access.",
+        ) {
+            SessionState.accountUnlocked = true
+            routeAfterUnlock()
+        }
+    }
+
     private fun enterProfile(profile: Profile) {
         Profiles.setActiveId(this, profile.id)
-        if (profile.isOwner) SessionState.ownerAuthed = true
         AeonHomeActivity.start(this)
         finish()
     }
@@ -109,12 +136,12 @@ class ProfileGateActivity : Activity() {
             ).apply { topMargin = dp(20) }
         }
         buttons.addView(accentButton("＋ Add profile") {
-            requireOwnerAuth { ProfileSetupActivity.startAdd(this) }
+            ProfileSetupActivity.startAdd(this)
         }.also {
             (it.layoutParams as? LinearLayout.LayoutParams)?.apply { rightMargin = dp(16) }
         })
         buttons.addView(accentButton("⚙ Manage profiles") {
-            requireOwnerAuth { ManageProfilesActivity.start(this) }
+            ManageProfilesActivity.start(this)
         })
         root.addView(buttons)
 
@@ -169,7 +196,7 @@ class ProfileGateActivity : Activity() {
             })
             card.addView(TextView(this@ProfileGateActivity).apply {
                 val locked = profile.pinHash != null
-                text = if (locked) "🔒 PIN" else if (profile.isOwner) "Owner" else "No PIN"
+                text = if (locked) "🔒 PIN" else "No PIN"
                 setTextColor(AeonUi.SUB)
                 textSize = 20f
                 gravity = Gravity.CENTER
@@ -184,24 +211,13 @@ class ProfileGateActivity : Activity() {
         if (profile.pinHash == null) {
             enterProfile(profile)
         } else {
-            showPinEntry(profile, PinPurpose.UNLOCK, "Enter your PIN") { enterProfile(profile) }
-        }
-    }
-
-    // endregion
-
-    // region owner auth
-
-    private fun requireOwnerAuth(next: () -> Unit) {
-        val owner = profiles.firstOrNull { it.isOwner }
-        if (owner?.pinHash == null) {
-            SessionState.ownerAuthed = true
-            next()
-        } else {
-            showPinEntry(owner, PinPurpose.OWNER_AUTH, "Owner PIN required") {
-                SessionState.ownerAuthed = true
-                next()
-            }
+            showPinEntry(
+                profile = profile,
+                purpose = PinPurpose.PROFILE,
+                title = "Enter your PIN",
+                subtitle = profile.name,
+                footer = "Forgot your PIN? It can be reset in Manage profiles.",
+            ) { enterProfile(profile) }
         }
     }
 
@@ -209,7 +225,14 @@ class ProfileGateActivity : Activity() {
 
     // region PIN entry
 
-    private fun showPinEntry(profile: Profile, purpose: PinPurpose, title: String, onSuccess: () -> Unit) {
+    private fun showPinEntry(
+        profile: Profile?,
+        purpose: PinPurpose,
+        title: String,
+        subtitle: String,
+        footer: String,
+        onSuccess: () -> Unit,
+    ) {
         pinMode = true
         pinDigits.clear()
         pinTarget = profile
@@ -219,7 +242,7 @@ class ProfileGateActivity : Activity() {
         val root = screenRoot()
         root.gravity = Gravity.CENTER_HORIZONTAL
         root.addView(titleView(title, 48))
-        root.addView(subtitleView(profile.name, 28))
+        root.addView(subtitleView(subtitle, 28))
 
         dotsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -305,7 +328,7 @@ class ProfileGateActivity : Activity() {
         }
         root.addView(pinError)
 
-        root.addView(subtitleView("Forgot your PIN? Ask the owner to reset it.", 20).apply {
+        root.addView(subtitleView(footer, 20).apply {
             gravity = Gravity.CENTER
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -359,17 +382,19 @@ class ProfileGateActivity : Activity() {
 
     private fun submitPin() {
         val pin = pinDigits.toString()
-        val target = pinTarget
-        if (target == null) {
-            showPicker()
-            return
-        }
         if (!Profiles.isValidPin(pin)) {
             pinError?.text = "PINs are 4–6 digits."
             clearPin()
             return
         }
-        if (Profiles.verifyPin(target, pin)) {
+        val ok = when (pinPurpose) {
+            PinPurpose.ACCOUNT -> Profiles.verifyAccountPin(this, pin)
+            PinPurpose.PROFILE -> {
+                val target = pinTarget
+                target != null && Profiles.verifyPin(target, pin)
+            }
+        }
+        if (ok) {
             val next = pinAfterAuth
             pinAfterAuth = null
             pinMode = false
@@ -401,9 +426,10 @@ class ProfileGateActivity : Activity() {
 
     @Deprecated("Use for the simple gate back behavior")
     override fun onBackPressed() {
-        if (pinMode) {
+        if (pinMode && pinPurpose == PinPurpose.PROFILE) {
             showPicker()
         } else {
+            // The account PIN screen is the lock itself: Back just exits.
             super.onBackPressed()
         }
     }

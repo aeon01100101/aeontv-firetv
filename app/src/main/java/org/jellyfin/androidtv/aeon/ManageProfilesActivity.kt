@@ -19,9 +19,10 @@ import org.jellyfin.androidtv.aeon.AeonUi.subtitleView
 import org.jellyfin.androidtv.aeon.AeonUi.titleView
 
 /**
- * Owner-only profile management: reset any profile's PIN (set a new one or
- * remove it) and delete non-owner profiles. Reached only after owner
- * authentication in the gate — and guarded again here.
+ * Profile management, reached only with the account unlocked: reset any
+ * profile's PIN (set a new one or remove it), delete profiles, add a
+ * profile, and change the account PIN. Guarded here as well as at the gate,
+ * so a cold start of this screen without unlocking bounces straight out.
  */
 class ManageProfilesActivity : Activity() {
 
@@ -30,8 +31,7 @@ class ManageProfilesActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val owner = Profiles.owner(this)
-        if (owner?.pinHash != null && !SessionState.ownerAuthed) {
+        if (!SessionState.accountUnlocked) {
             finish()
             return
         }
@@ -44,7 +44,12 @@ class ManageProfilesActivity : Activity() {
         val profiles = Profiles.load(this)
         val root = screenRoot()
         root.addView(titleView("Manage profiles", 48))
-        root.addView(subtitleView("Only the owner can change PINs or delete profiles.", 24))
+        root.addView(
+            subtitleView(
+                "Reset a profile's PIN, delete a profile, or change the account PIN.",
+                24,
+            ),
+        )
 
         val list = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -58,8 +63,71 @@ class ManageProfilesActivity : Activity() {
             list.addView(profileRow(profile))
         }
         root.addView(list)
-        root.addView(accentButton("Done") { finish() })
+
+        val buttons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(8) }
+        }
+        buttons.addView(accentButton("＋ Add profile") {
+            ProfileSetupActivity.startAdd(this)
+        }.also {
+            (it.layoutParams as? LinearLayout.LayoutParams)?.apply { rightMargin = dp(12) }
+        })
+        buttons.addView(accentButton("Change account PIN") { showChangeAccountPin() }.also {
+            (it.layoutParams as? LinearLayout.LayoutParams)?.apply { rightMargin = dp(12) }
+        })
+        buttons.addView(accentButton("Done") { finish() })
+        root.addView(buttons)
         setContentView(root)
+    }
+
+    private fun showChangeAccountPin() {
+        val root = screenRoot()
+        root.addView(titleView("Change account PIN", 48))
+        root.addView(
+            subtitleView(
+                "The account PIN unlocks this TV and protects Manage profiles.",
+                24,
+            ),
+        )
+
+        val pinField = pinField("New account PIN (4–6 digits)")
+        val pinConfirm = pinField("Repeat new account PIN")
+        val error = errorText()
+        root.addView(pinField)
+        root.addView(pinConfirm)
+        root.addView(error)
+
+        val buttons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            ).apply { topMargin = dp(16) }
+        }
+        buttons.addView(accentButton("Save") {
+            val pin = pinField.text.toString().trim()
+            val confirm = pinConfirm.text.toString().trim()
+            when {
+                !Profiles.isValidPin(pin) -> error.text = "PINs are 4–6 digits."
+                pin != confirm -> error.text = "The two PINs don't match."
+                else -> {
+                    Profiles.setAccountPin(this, pin)
+                    showList()
+                }
+            }
+        }.also {
+            (it.layoutParams as? LinearLayout.LayoutParams)?.apply { rightMargin = dp(16) }
+        })
+        buttons.addView(accentButton("Cancel") { showList() })
+        root.addView(buttons)
+        setContentView(root)
+        pinField.requestFocus()
     }
 
     private fun profileRow(profile: Profile): LinearLayout {
@@ -81,7 +149,7 @@ class ManageProfilesActivity : Activity() {
                 }
         }
         textCol.addView(TextView(this).apply {
-            text = profile.name + if (profile.isOwner) " · Owner" else ""
+            text = profile.name
             setTextColor(AeonUi.TEXT)
             textSize = 30f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -96,9 +164,7 @@ class ManageProfilesActivity : Activity() {
         row.addView(accentButton("Reset PIN") { showResetPin(profile) }.also {
             (it.layoutParams as? LinearLayout.LayoutParams)?.apply { rightMargin = dp(12) }
         })
-        if (!profile.isOwner) {
-            row.addView(accentButton("Delete") { showConfirmDelete(profile) })
-        }
+        row.addView(accentButton("Delete") { showConfirmDelete(profile) })
         return row
     }
 
@@ -167,8 +233,10 @@ class ManageProfilesActivity : Activity() {
             ).apply { topMargin = dp(24) }
         }
         buttons.addView(accentButton("Delete") {
-            if (Profiles.deleteProfile(this, profile.id)) {
-                showList()
+            Profiles.deleteProfile(this, profile.id)
+            if (Profiles.load(this).isEmpty()) {
+                // No profiles left: the gate will route to creating one.
+                finish()
             } else {
                 showList()
             }

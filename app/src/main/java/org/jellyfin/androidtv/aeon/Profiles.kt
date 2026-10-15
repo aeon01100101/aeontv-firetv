@@ -34,12 +34,15 @@ data class FavoriteEntry(
 )
 
 /**
- * One local TV profile. Everything lives on the device in
- * filesDir/profiles.json — no server, no account anywhere else.
+ * One local TV profile under this TV's single AeonTV account. Everything
+ * lives on the device in filesDir/profiles.json — no server.
  *
- * PINs are never stored in plaintext: only a salted SHA-256 hash is kept.
- * There is no master PIN and no backdoor: a forgotten PIN can only be reset
- * by the owner from Manage profiles (Isaiah's rule).
+ * The ACCOUNT has one PIN (set at first run) that unlocks the TV and guards
+ * profile management. Each PROFILE may optionally have its own PIN on top of
+ * that. PINs are never stored in plaintext: only salted SHA-256 hashes are
+ * kept. A forgotten profile PIN can be reset from Manage profiles (behind
+ * the account PIN). A forgotten account PIN has no reset and no backdoor —
+ * the only way back is clearing the app's data, which removes all profiles.
  */
 data class Profile(
     val id: String,
@@ -47,7 +50,6 @@ data class Profile(
     val colorIndex: Int,
     val pinSalt: String?,
     val pinHash: String?,
-    val isOwner: Boolean,
     val createdAt: Long,
     val ultraLow110p: Boolean,
     val favorites: List<FavoriteEntry>,
@@ -56,10 +58,10 @@ data class Profile(
 
 /**
  * Process-lifetime session state. Resets if the app process dies, which is
- * the safe direction: owner privileges never survive a restart.
+ * the safe direction: the account lock never stays open across a restart.
  */
 object SessionState {
-    var ownerAuthed: Boolean = false
+    var accountUnlocked: Boolean = false
 }
 
 /**
@@ -93,14 +95,56 @@ object Profiles {
 
     fun hasProfiles(context: Context): Boolean = load(context).isNotEmpty()
 
-    fun owner(context: Context): Profile? = load(context).firstOrNull { it.isOwner }
+    // region account
+
+    private fun readRoot(context: Context): JSONObject {
+        val f = file(context)
+        if (!f.exists()) return JSONObject()
+        return try {
+            JSONObject(f.readText())
+        } catch (e: Exception) {
+            JSONObject()
+        }
+    }
+
+    private fun writeRoot(context: Context, root: JSONObject) {
+        try {
+            file(context).writeText(root.toString())
+        } catch (e: Exception) {
+            // Best-effort: a failed write is just lost this time.
+        }
+    }
+
+    /** The account exists once its PIN has been set at first run. */
+    fun hasAccount(context: Context): Boolean {
+        val account = readRoot(context).optJSONObject("account") ?: return false
+        return account.optString("pinHash").isNotBlank()
+    }
+
+    fun setAccountPin(context: Context, pin: String) {
+        val salt = UUID.randomUUID().toString()
+        val root = readRoot(context)
+        root.put(
+            "account",
+            JSONObject().put("pinSalt", salt).put("pinHash", hashPin(salt, pin)),
+        )
+        writeRoot(context, root)
+    }
+
+    fun verifyAccountPin(context: Context, pin: String): Boolean {
+        val account = readRoot(context).optJSONObject("account") ?: return false
+        val salt = account.optString("pinSalt")
+        val hash = account.optString("pinHash")
+        if (salt.isBlank() || hash.isBlank()) return false
+        return hashPin(salt, pin) == hash
+    }
+
+    // endregion
 
     /** Load all profiles; a missing or corrupt file means "no profiles" (first-run). */
     fun load(context: Context): List<Profile> {
-        val f = file(context)
-        if (!f.exists()) return emptyList()
         return try {
-            val root = JSONObject(f.readText())
+            val root = readRoot(context)
             val arr = root.optJSONArray("profiles") ?: return emptyList()
             val out = mutableListOf<Profile>()
             for (i in 0 until arr.length()) {
@@ -113,7 +157,6 @@ object Profiles {
                     colorIndex = o.optInt("colorIndex", 0),
                     pinSalt = o.optString("pinSalt").takeIf { it.isNotBlank() },
                     pinHash = o.optString("pinHash").takeIf { it.isNotBlank() },
-                    isOwner = o.optBoolean("isOwner", false),
                     createdAt = o.optLong("createdAt", 0L),
                     ultraLow110p = o.optBoolean("ultraLow110p", false),
                     favorites = parseFavorites(o.optJSONArray("favorites")),
@@ -127,14 +170,14 @@ object Profiles {
     }
 
     private fun save(context: Context, profiles: List<Profile>) {
-        val root = JSONObject()
+        // Start from the current root so the account block survives.
+        val root = readRoot(context)
         val arr = JSONArray()
         for (p in profiles) {
             val o = JSONObject()
                 .put("id", p.id)
                 .put("name", p.name)
                 .put("colorIndex", p.colorIndex)
-                .put("isOwner", p.isOwner)
                 .put("createdAt", p.createdAt)
                 .put("ultraLow110p", p.ultraLow110p)
             if (p.pinSalt != null && p.pinHash != null) {
@@ -171,11 +214,7 @@ object Profiles {
             arr.put(o)
         }
         root.put("profiles", arr)
-        try {
-            file(context).writeText(root.toString())
-        } catch (e: Exception) {
-            // Best-effort: a failed write is just lost this time.
-        }
+        writeRoot(context, root)
     }
 
     private fun parseFavorites(arr: JSONArray?): List<FavoriteEntry> {
@@ -245,7 +284,6 @@ object Profiles {
         name: String,
         colorIndex: Int,
         pin: String?,
-        isOwner: Boolean,
         ultraLow110p: Boolean,
     ): Profile {
         val salt = if (pin != null) UUID.randomUUID().toString() else null
@@ -255,7 +293,6 @@ object Profiles {
             colorIndex = colorIndex,
             pinSalt = salt,
             pinHash = if (pin != null && salt != null) hashPin(salt, pin) else null,
-            isOwner = isOwner,
             createdAt = System.currentTimeMillis(),
             ultraLow110p = ultraLow110p,
             favorites = emptyList(),
@@ -280,11 +317,10 @@ object Profiles {
         }
     }
 
-    /** The owner profile can never be deleted. Returns false if refused. */
+    /** Any profile can be deleted from Manage profiles (account-authorized). */
     fun deleteProfile(context: Context, id: String): Boolean {
         val profiles = load(context)
-        val target = profiles.firstOrNull { it.id == id } ?: return false
-        if (target.isOwner) return false
+        if (profiles.none { it.id == id }) return false
         save(context, profiles.filterNot { it.id == id })
         if (activeId(context) == id) clearActiveId(context)
         return true

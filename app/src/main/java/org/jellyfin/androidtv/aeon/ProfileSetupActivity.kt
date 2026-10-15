@@ -6,7 +6,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.InputType
 import android.view.Gravity
-import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -21,13 +20,18 @@ import org.jellyfin.androidtv.aeon.AeonUi.titleView
 import org.jellyfin.androidtv.R
 
 /**
- * Profile creation: the first-run owner setup and "Add profile" share this
- * screen. Name, avatar color, and an optional 4–6 digit PIN (typed twice so
- * a mistype can't lock anyone out).
+ * First-run setup and "Add profile".
+ *
+ * First run is two steps: (1) set the ACCOUNT PIN — the one PIN that locks
+ * this TV and guards profile management; (2) create the first profile.
+ * Profiles after that are created from step 2 alone (from the picker).
+ * A profile PIN is optional; when set it is typed twice so a mistype can't
+ * lock anyone out.
  */
 class ProfileSetupActivity : Activity() {
 
-    private var isOwnerMode = false
+    private var firstRun = false
+    private var pendingAccountPin: String? = null
     private var selectedColor = 0
     private lateinit var nameField: EditText
     private lateinit var pinField: EditText
@@ -37,22 +41,88 @@ class ProfileSetupActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        isOwnerMode = intent.getBooleanExtra(EXTRA_OWNER_MODE, false)
+        firstRun = intent.getBooleanExtra(EXTRA_FIRST_RUN, false)
+        if (firstRun) {
+            showAccountStep()
+        } else {
+            showProfileStep()
+        }
+    }
 
+    // region step 1: account PIN (first run only)
+
+    private fun showAccountStep() {
+        val root = screenRoot()
+        root.addView(titleView("Welcome to AeonTV", 48))
+        root.addView(
+            subtitleView(
+                "Set the account PIN for this TV. It unlocks AeonTV and " +
+                    "protects your profiles and settings.",
+                24,
+            ),
+        )
+
+        root.addView(label("Account PIN"))
+        root.addView(subtitleView("4–6 digits. You'll enter it when AeonTV starts.", 20))
+        val accountPinField = pinField("Account PIN")
+        root.addView(accountPinField)
+        val accountPinConfirm = pinField("Repeat account PIN")
+        root.addView(accountPinConfirm)
+
+        val error = errorText()
+        root.addView(error)
+
+        val buttons = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_HORIZONTAL
+        }
+        buttons.addView(accentButton("Continue") {
+            val pin = accountPinField.text.toString().trim()
+            val confirm = accountPinConfirm.text.toString().trim()
+            when {
+                !Profiles.isValidPin(pin) -> error.text = "PINs are 4–6 digits."
+                pin != confirm -> error.text = "The two PINs don't match."
+                else -> {
+                    pendingAccountPin = pin
+                    showProfileStep()
+                }
+            }
+        })
+        root.addView(buttons)
+
+        root.addView(
+            subtitleView(
+                "There's no way to reset a forgotten account PIN — write it down somewhere safe.",
+                20,
+            ).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                ).apply { topMargin = dp(24) }
+            },
+        )
+
+        setContentView(root)
+        accountPinField.requestFocus()
+    }
+
+    // endregion
+
+    // region step 2: the profile itself
+
+    private fun showProfileStep() {
+        selectedColor = 0
         val root = screenRoot()
         root.addView(
             titleView(
-                if (isOwnerMode) "Welcome to AeonTV" else "Add profile",
+                if (firstRun) "Create your first profile" else "Add profile",
                 48,
             ),
         )
         root.addView(
             subtitleView(
-                if (isOwnerMode) {
-                    "Create your profile — you'll be the owner of this TV."
-                } else {
-                    "A new profile for this TV."
-                },
+                "Profiles are who's watching. Each one keeps its own favorites, " +
+                    "Continue Watching and quality setting — and can have its own PIN if you want one.",
                 24,
             ),
         )
@@ -72,74 +142,32 @@ class ProfileSetupActivity : Activity() {
         root.addView(swatchRow)
         renderSwatches()
 
-        root.addView(label("PIN (optional)"))
+        root.addView(label("Profile PIN (optional)"))
         root.addView(subtitleView("4–6 digits. Leave blank for no PIN.", 20))
         pinField = pinField("PIN")
         root.addView(pinField)
         pinConfirmField = pinField("Repeat PIN")
         root.addView(pinConfirmField)
 
-        errorView = TextView(this).apply {
-            setTextColor(0xFFFF6B6B.toInt())
-            textSize = 22f
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                topMargin = dp(8)
-                bottomMargin = dp(8)
-            }
-        }
+        errorView = errorText()
         root.addView(errorView)
 
         val buttons = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_HORIZONTAL
         }
-        buttons.addView(accentButton(if (isOwnerMode) "Create profile" else "Add profile") {
+        buttons.addView(accentButton(if (firstRun) "Create profile" else "Add profile") {
             submit()
         }.also {
             (it.layoutParams as? LinearLayout.LayoutParams)?.apply { rightMargin = dp(16) }
         })
-        if (!isOwnerMode) {
+        if (!firstRun) {
             buttons.addView(accentButton("Cancel") { finish() })
         }
         root.addView(buttons)
 
         setContentView(root)
         nameField.requestFocus()
-    }
-
-    private fun label(text: String): TextView = TextView(this).apply {
-        this.text = text
-        setTextColor(AeonUi.TEXT)
-        textSize = 26f
-        typeface = android.graphics.Typeface.DEFAULT_BOLD
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply {
-            topMargin = dp(12)
-            bottomMargin = dp(8)
-        }
-    }
-
-    private fun editField(hint: String): EditText = EditText(this).apply {
-        this.hint = hint
-        setHintTextColor(AeonUi.SUB)
-        setTextColor(AeonUi.TEXT)
-        textSize = 28f
-        isFocusable = true
-        isFocusableInTouchMode = true
-        setSingleLine()
-        layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-        ).apply { bottomMargin = dp(8) }
-    }
-
-    private fun pinField(hint: String): EditText = editField(hint).apply {
-        inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
     }
 
     private fun renderSwatches() {
@@ -187,36 +215,94 @@ class ProfileSetupActivity : Activity() {
             }
             else -> pin
         }
+        if (firstRun) {
+            val accountPin = pendingAccountPin
+            if (accountPin == null) {
+                // Shouldn't happen (step 1 gates this), but never strand setup.
+                showAccountStep()
+                return
+            }
+            Profiles.setAccountPin(this, accountPin)
+        }
         val profile = Profiles.addProfile(
             this,
             name = name,
             colorIndex = selectedColor,
             pin = finalPin,
-            isOwner = isOwnerMode,
-            ultraLow110p = if (isOwnerMode) StreamPrefs.globalIsUltraLow(this) else false,
+            ultraLow110p = if (firstRun) StreamPrefs.globalIsUltraLow(this) else false,
         )
-        if (isOwnerMode) {
+        if (firstRun) {
             Profiles.setActiveId(this, profile.id)
-            SessionState.ownerAuthed = true
+            SessionState.accountUnlocked = true
             AeonHomeActivity.start(this)
         }
         finish()
     }
 
-    companion object {
-        private const val EXTRA_OWNER_MODE = "owner_mode"
+    // endregion
 
-        fun startOwner(context: Context) {
+    // region shared field builders
+
+    private fun label(text: String): TextView = TextView(this).apply {
+        this.text = text
+        setTextColor(AeonUi.TEXT)
+        textSize = 26f
+        typeface = android.graphics.Typeface.DEFAULT_BOLD
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            topMargin = dp(12)
+            bottomMargin = dp(8)
+        }
+    }
+
+    private fun editField(hint: String): EditText = EditText(this).apply {
+        this.hint = hint
+        setHintTextColor(AeonUi.SUB)
+        setTextColor(AeonUi.TEXT)
+        textSize = 28f
+        isFocusable = true
+        isFocusableInTouchMode = true
+        setSingleLine()
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply { bottomMargin = dp(8) }
+    }
+
+    private fun pinField(hint: String): EditText = editField(hint).apply {
+        inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+    }
+
+    private fun errorText(): TextView = TextView(this).apply {
+        setTextColor(0xFFFF6B6B.toInt())
+        textSize = 22f
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            topMargin = dp(8)
+            bottomMargin = dp(8)
+        }
+    }
+
+    // endregion
+
+    companion object {
+        private const val EXTRA_FIRST_RUN = "first_run"
+
+        fun startFirstRun(context: Context) {
             context.startActivity(
                 Intent(context, ProfileSetupActivity::class.java)
-                    .putExtra(EXTRA_OWNER_MODE, true),
+                    .putExtra(EXTRA_FIRST_RUN, true),
             )
         }
 
         fun startAdd(context: Context) {
             context.startActivity(
                 Intent(context, ProfileSetupActivity::class.java)
-                    .putExtra(EXTRA_OWNER_MODE, false),
+                    .putExtra(EXTRA_FIRST_RUN, false),
             )
         }
     }

@@ -151,8 +151,10 @@ class AeonHomeActivity : Activity() {
             LinearLayout.LayoutParams.WRAP_CONTENT,
         ).apply { bottomMargin = dp(20) }
         setOnClickListener {
+            // Switching profiles stays inside the unlocked session: the
+            // account PIN is not asked again, only the next profile's own
+            // PIN (if it has one).
             Profiles.clearActiveId(this@AeonHomeActivity)
-            SessionState.ownerAuthed = false
             ProfileGateActivity.start(this@AeonHomeActivity)
             finish()
         }
