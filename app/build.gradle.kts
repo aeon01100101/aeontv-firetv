@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
 	id("com.android.application")
 	kotlin("android")
@@ -36,14 +38,14 @@ android {
 	// lives OUTSIDE this repo; when it is absent the default debug signing is
 	// used instead.
 	val aeonPropsFile = file("${rootProject.projectDir}/../signing/keystore.properties")
-	val aeonProps = if (aeonPropsFile.exists()) {
-		java.util.Properties().apply { aeonPropsFile.inputStream().use { load(it) } }
-	} else {
-		null
+	val aeonProps = Properties()
+	val aeonHasKey = aeonPropsFile.exists()
+	if (aeonHasKey) {
+		aeonPropsFile.inputStream().use { aeonProps.load(it) }
 	}
 
 	signingConfigs {
-		if (aeonProps != null) {
+		if (aeonHasKey) {
 			create("aeon") {
 				storeFile = file("${rootProject.projectDir}/../signing/${aeonProps.getProperty("storeFile")}")
 				storePassword = aeonProps.getProperty("storePassword")
@@ -65,7 +67,7 @@ android {
 			// Set flavored application name
 			resValue("string", "app_name", "@string/app_name_release")
 
-			if (aeonProps != null) signingConfig = signingConfigs.getByName("aeon")
+			if (aeonHasKey) signingConfig = signingConfigs.getByName("aeon")
 
 			buildConfigField("boolean", "DEVELOPMENT", "false")
 		}
@@ -82,7 +84,7 @@ android {
 			// Set flavored application name
 			resValue("string", "app_name", "@string/app_name_debug")
 
-			if (aeonProps != null) signingConfig = signingConfigs.getByName("aeon")
+			if (aeonHasKey) signingConfig = signingConfigs.getByName("aeon")
 
 			buildConfigField("boolean", "DEVELOPMENT", (defaultConfig.versionCode!! < 100).toString())
 		}
