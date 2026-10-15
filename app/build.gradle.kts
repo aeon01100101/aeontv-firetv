@@ -31,6 +31,28 @@ android {
 		isCoreLibraryDesugaringEnabled = true
 	}
 
+	// AeonTV permanent signing key (workspace keystore, survives build-machine
+	// changes so updates always install over the previous build). The keystore
+	// lives OUTSIDE this repo; when it is absent the default debug signing is
+	// used instead.
+	val aeonPropsFile = file("${rootProject.projectDir}/../signing/keystore.properties")
+	val aeonProps = if (aeonPropsFile.exists()) {
+		java.util.Properties().apply { aeonPropsFile.inputStream().use { load(it) } }
+	} else {
+		null
+	}
+
+	signingConfigs {
+		if (aeonProps != null) {
+			create("aeon") {
+				storeFile = file("${rootProject.projectDir}/../signing/${aeonProps.getProperty("storeFile")}")
+				storePassword = aeonProps.getProperty("storePassword")
+				keyAlias = aeonProps.getProperty("keyAlias")
+				keyPassword = aeonProps.getProperty("keyPassword")
+			}
+		}
+	}
+
 	buildTypes {
 		val release by getting {
 			isMinifyEnabled = false
@@ -42,6 +64,8 @@ android {
 
 			// Set flavored application name
 			resValue("string", "app_name", "@string/app_name_release")
+
+			if (aeonProps != null) signingConfig = signingConfigs.getByName("aeon")
 
 			buildConfigField("boolean", "DEVELOPMENT", "false")
 		}
@@ -57,6 +81,8 @@ android {
 
 			// Set flavored application name
 			resValue("string", "app_name", "@string/app_name_debug")
+
+			if (aeonProps != null) signingConfig = signingConfigs.getByName("aeon")
 
 			buildConfigField("boolean", "DEVELOPMENT", (defaultConfig.versionCode!! < 100).toString())
 		}
